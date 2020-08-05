@@ -1,0 +1,31 @@
+namespace IotDirector.Settings
+{
+    public enum DigitalSensorClass
+    {
+        None,
+        Battery,
+        BatteryCharging,
+        Cold,
+        Connectivity,
+        Door,
+        GarageDoor,
+        Gas,
+        Heat,
+        Light,
+        Lock,
+        Moisture,
+        Motion,
+        Moving,
+        Occupancy,
+        Opening,
+        Plug,
+        Power,
+        Presence,
+        Problem,
+        Safety,
+        Smoke,
+        Sound,
+        Vibration,
+        Window
+    }
+}

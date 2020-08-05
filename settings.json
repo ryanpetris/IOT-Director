@@ -1,0 +1,9 @@
+{
+  "ListenPort": 8000,
+  "MqttHost": "",
+  "MqttPort": 1883,
+  "MqttClientId": "iot-director",
+  "MqttBaseDiscoveryTopic": "homeassistant",
+  "MqttBaseControlTopic": "iot-director",
+  "Sensors": []
+}
