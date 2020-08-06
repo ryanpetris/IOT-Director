@@ -62,6 +62,15 @@ namespace IotDirector.Connection
             if (mode == PinMode.Output)
                 DigitalWrite(pin, false);
         }
+
+        public void SetPinMode(int pin, PinMode mode, bool state)
+        {
+            if (mode != PinMode.Output)
+                throw new ArduinoException($"Cannot set initial state for pin mode {mode}.");
+            
+            SendCommand(new PinModeCommand(pin, mode));
+            DigitalWrite(pin, state);
+        }
         
         private string GetClientId()
         {

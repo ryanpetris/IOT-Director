@@ -84,17 +84,28 @@ namespace IotDirector.Connection
                 switch (sensor.Type)
                 {
                     case SensorType.Digital:
+                    {
                         Arduino.SetPinMode(sensor.Pin, PinMode.InputPullup);
+                        
                         break;
-                    
+                    }
+
                     case SensorType.Analog:
+                    {
                         Arduino.SetPinMode(sensor.Pin, PinMode.Input);
+                        
                         break;
-                    
+                    }
+
                     case SensorType.Switch:
-                        Arduino.SetPinMode(sensor.Pin, PinMode.Output);
-                        PinStates[sensor.Pin] = 0;
+                    {
+                        var switchSensor = (SwitchSensor) sensor;
+                        
+                        Arduino.SetPinMode(sensor.Pin, PinMode.Output, switchSensor.Invert);
+                        PinStates[sensor.Pin] = switchSensor.Invert ? 1 : 0;
+                        
                         break;
+                    }
                     
                 }
             }
