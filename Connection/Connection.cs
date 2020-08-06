@@ -100,9 +100,15 @@ namespace IotDirector.Connection
                     case SensorType.Switch:
                     {
                         var switchSensor = (SwitchSensor) sensor;
+                        var state = switchSensor.DefaultState;
+
+                        if (switchSensor.Invert)
+                            state = !state;
                         
-                        Arduino.SetPinMode(sensor.Pin, PinMode.Output, switchSensor.Invert);
-                        PinStates[sensor.Pin] = switchSensor.Invert ? 1 : 0;
+                        PinStates[sensor.Pin] = state ? 1 : 0;
+                        
+                        Arduino.SetPinMode(sensor.Pin, PinMode.Output, state);
+                        MqttClient.PublishSensorState(sensor, switchSensor.DefaultState);
                         
                         break;
                     }
