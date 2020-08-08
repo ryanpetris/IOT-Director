@@ -1,6 +1,6 @@
+using System;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using IotDirector.Settings;
 using MQTTnet;
@@ -9,11 +9,11 @@ namespace IotDirector.Mqtt
 {
     public partial class HaMqttClient
     {
-        private Timer OnSendPinStateTimer { get; set; }
+        private static TimeSpan PublishPinStatesQuietPeriod { get; }= TimeSpan.FromSeconds(5);
 
         partial void InitPublish()
         {
-            OnSendPinStateTimer = new Timer(_ => PublishPinStates(), null, 0, 5000);
+            PublishPinStatesLoop();
         }
         
         private async Task PublishConfiguration()
@@ -105,6 +105,38 @@ namespace IotDirector.Mqtt
                 return;
             
             RunAllConnections(c => c.PublishPinStates());
+        }
+
+        private async void PublishPinStatesLoop()
+        {
+            await Task.Yield();
+            
+            try
+            {
+                while (true)
+                {
+                    if (CancellationToken.IsCancellationRequested)
+                        CancellationToken.ThrowIfCancellationRequested();
+
+                    PublishPinStates();
+
+                    if (CancellationToken.IsCancellationRequested)
+                        CancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        await Task.Delay(MessageQuietPeriod, CancellationToken);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // This block intentionally left empty.
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Publish Pin States thread shutdown.");
+            }
         }
     }
 }

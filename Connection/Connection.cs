@@ -3,7 +3,6 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using IotDirector.Commands;
 using IotDirector.Mqtt;
 using IotDirector.Settings;
 using AppSettings = IotDirector.Settings.Settings;
@@ -20,6 +19,7 @@ namespace IotDirector.Connection
         
         private HaMqttClient MqttClient { get; }
         
+        private CancellationToken CancellationToken { get; }
         private AppSettings Settings { get; }
         private Sensor[] Sensors { get; }
         private SensorHandler SensorHandler { get; }
@@ -27,8 +27,9 @@ namespace IotDirector.Connection
         private TaskStatus Status { get; set; }
         private Thread Thread { get; }
         
-        public Connection(AppSettings settings, TcpClient client, HaMqttClient mqttClient)
+        public Connection(AppSettings settings, TcpClient client, HaMqttClient mqttClient, CancellationToken cancellationToken)
         {
+            CancellationToken = cancellationToken;            
             Client = client;
             Arduino = new ArduinoProxy(client.GetStream());
             
@@ -43,6 +44,8 @@ namespace IotDirector.Connection
             SensorHandler = new AggregateSensorHandler(Arduino, MqttClient);
 
             MqttClient.AddConnection(this);
+            
+            MonitorCancellation();
         }
 
         public void Start()
@@ -74,6 +77,20 @@ namespace IotDirector.Connection
                 }
 
                 StopInternal();
+            }
+        }
+
+        private async void MonitorCancellation()
+        {
+            await Task.Yield();
+
+            try
+            {
+                await Task.Delay(-1, CancellationToken);
+            }
+            catch (TaskCanceledException)
+            {
+                Stop();
             }
         }
 
@@ -135,12 +152,17 @@ namespace IotDirector.Connection
 
         private void StopInternal()
         {
+            if (Status == TaskStatus.RanToCompletion)
+                return;
+            
             Console.WriteLine($"Client {Arduino.DeviceId} disconnected from {Client.Client.RemoteEndPoint}.");
 
             MqttClient.RemoveConnection(this);
             
             try
             {
+                Client.Client.Shutdown(SocketShutdown.Both);
+                Client.Client.Close();
                 Client.Close();
             }
             catch (Exception e)
@@ -153,6 +175,8 @@ namespace IotDirector.Connection
 
         public void Dispose()
         {
+            StopInternal();
+            
             Arduino?.Dispose();
             Client?.Dispose();
         }

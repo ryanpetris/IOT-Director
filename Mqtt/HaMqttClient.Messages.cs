@@ -1,7 +1,7 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using IotDirector.Settings;
 using MQTTnet;
@@ -12,14 +12,14 @@ namespace IotDirector.Mqtt
     public partial class HaMqttClient
     {
         private const int MessageBatchSize = 10;
+        private static TimeSpan MessageQuietPeriod { get; } = TimeSpan.FromMilliseconds(50);
         
         private ConcurrentQueue<MqttApplicationMessage> Messages { get; } = new ConcurrentQueue<MqttApplicationMessage>();
         private ConcurrentQueue<MqttApplicationMessage> PendingMessages { get; } = new ConcurrentQueue<MqttApplicationMessage>();
-        private Timer MessagePublishTimer { get; set; }
 
         partial void InitMessages()
         {
-            MessagePublishTimer = new Timer(_ => PublishMessages().Wait(), null, 0, 50);
+            PublishMessagesLoop();
         }
 
         private async Task PublishMessages()
@@ -61,6 +61,37 @@ namespace IotDirector.Mqtt
                 await Client.PublishAsync(messages);
                 
                 PendingMessages.Clear();
+            }
+        }
+
+        private async void PublishMessagesLoop()
+        {
+            await Task.Yield();
+            
+            try {
+                while (true)
+                {
+                    if (CancellationToken.IsCancellationRequested)
+                        CancellationToken.ThrowIfCancellationRequested();
+
+                    await PublishMessages();
+                    
+                    if (CancellationToken.IsCancellationRequested)
+                        CancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        await Task.Delay(MessageQuietPeriod, CancellationToken);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Publish Messages thread shutdown.");
             }
         }
         

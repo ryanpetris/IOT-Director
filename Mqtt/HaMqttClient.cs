@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using MQTTnet;
 using MQTTnet.Client;
@@ -15,14 +16,18 @@ namespace IotDirector.Mqtt
     {
         private IMqttClient Client { get; }
         private AppSettings Settings { get; }
+        private CancellationToken CancellationToken { get; }
         
-        public HaMqttClient(AppSettings settings)
+        public HaMqttClient(AppSettings settings, CancellationToken cancellationToken)
         {
             Settings = settings;
+            CancellationToken = cancellationToken;
             Client = Connect();
             
             InitMessages();
             InitPublish();
+            
+            MonitorCancellation();
         }
 
         partial void InitMessages();
@@ -44,8 +49,39 @@ namespace IotDirector.Mqtt
             return client;
         }
 
+        private async void MonitorCancellation()
+        {
+            await Task.Yield();
+
+            try
+            {
+                while (true)
+                {
+                    if (CancellationToken.IsCancellationRequested)
+                        CancellationToken.ThrowIfCancellationRequested();
+                    
+                    try
+                    {
+                        await Task.Delay(-1, CancellationToken);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                await Client.DisconnectAsync();
+                
+                Console.WriteLine("MQTT Client shutdown.");
+            }
+        }
+
         private async Task OnConnect(MqttClientConnectedEventArgs args)
         {
+            await Task.Yield();
+
             await Client.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic($"{Settings.MqttBaseDiscoveryTopic}/status").Build());
             await Client.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic($"{Settings.MqttBaseControlTopic}/+/set").Build());
             
@@ -54,6 +90,11 @@ namespace IotDirector.Mqtt
 
         private async Task OnDisconnect(MqttClientDisconnectedEventArgs args)
         {
+            await Task.Yield();
+            
+            if (CancellationToken.IsCancellationRequested)
+                return;
+            
             Console.WriteLine("Connecting to MQTT host...");
                 
             await Task.Delay(TimeSpan.FromSeconds(1));
@@ -78,6 +119,8 @@ namespace IotDirector.Mqtt
 
         private async Task OnMessage(MqttApplicationMessageReceivedEventArgs args)
         {
+            await Task.Yield();
+
             var message = args.ApplicationMessage;
 
             if (message.Topic == $"{Settings.MqttBaseDiscoveryTopic}/status")
