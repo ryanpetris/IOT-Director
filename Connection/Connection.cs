@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
@@ -20,7 +19,7 @@ namespace IotDirector.Connection
         
         private AppSettings Settings { get; }
         private Sensor[] Sensors { get; }
-        private Dictionary<int, int> PinStates { get; }
+        private PinState PinState { get; } = new PinState();
         
         private TaskStatus Status { get; set; }
         private Thread Thread { get; }
@@ -37,7 +36,6 @@ namespace IotDirector.Connection
             
             Settings = settings;
             Sensors = Settings.Sensors.Where(s => s.DeviceId == Arduino.DeviceId).ToArray();
-            PinStates = new Dictionary<int, int>();
             
             Status = TaskStatus.Created;
             Thread = new Thread(Run);
@@ -106,9 +104,8 @@ namespace IotDirector.Connection
 
                         if (switchSensor.Invert)
                             state = !state;
-                        
-                        PinStates[sensor.Pin] = state ? 1 : 0;
-                        
+
+                        PinState.Set(sensor.Pin, state);
                         Arduino.SetPinMode(sensor.Pin, PinMode.Output, state);
                         MqttClient.PublishSensorState(sensor, switchSensor.DefaultState);
                         
@@ -130,7 +127,7 @@ namespace IotDirector.Connection
                         var digitalSensor = (DigitalSensor) sensor;
                         var state = Arduino.DigitalRead(digitalSensor.Pin);
                         
-                        if (!SavePinState(sensor.Pin, state))
+                        if (!PinState.Set(sensor.Pin, state))
                             continue;
                         
                         if (digitalSensor.Invert)
@@ -172,7 +169,7 @@ namespace IotDirector.Connection
 
                         var pinState = (state ? 1 : 0) + (status ? 0 : -1);
                         
-                        if (!SavePinState(sensor.Pin, pinState))
+                        if (!PinState.Set(sensor.Pin, pinState))
                             continue;
 
                         if (!status)
@@ -198,17 +195,15 @@ namespace IotDirector.Connection
         {
             foreach (var sensor in Sensors)
             {
-                if (!PinStates.ContainsKey(sensor.Pin))
+                if (!PinState.Has(sensor.Pin))
                     continue;
-
-                var state = PinStates[sensor.Pin];
 
                 switch (sensor.Type)
                 {
                     case SensorType.Digital:
                     {
                         var digitalSensor = (DigitalSensor) sensor;
-                        var digitalState = state == 1;
+                        var digitalState = PinState.GetBool(sensor.Pin);
 
                         if (digitalSensor.Invert)
                             digitalState = !digitalState;
@@ -221,6 +216,7 @@ namespace IotDirector.Connection
 
                     case SensorType.Analog:
                     {
+                        var state = PinState.Get(sensor.Pin);
                         var analogStatus = state >= 0;
                         var analogState = state == 1;
 
@@ -242,7 +238,7 @@ namespace IotDirector.Connection
                     case SensorType.Switch:
                     {
                         var switchSensor = (SwitchSensor) sensor;
-                        var switchState = state == 1;
+                        var switchState = PinState.GetBool(sensor.Pin);
 
                         if (switchSensor.Invert)
                             switchState = !switchState;
@@ -268,7 +264,7 @@ namespace IotDirector.Connection
             if (sensor.Invert)
                 pinState = !pinState;
             
-            if (!SavePinState(sensor.Pin, pinState))
+            if (!PinState.Set(sensor.Pin, pinState))
                 return;
             
             Arduino.DigitalWrite(sensor.Pin, pinState);
@@ -301,20 +297,6 @@ namespace IotDirector.Connection
                 
                 StopInternal();
             }
-        }
-
-        private bool SavePinState(int pin, bool value)
-        {
-            return SavePinState(pin, value ? 1 : 0);
-        }
-
-        private bool SavePinState(int pin, int value)
-        {
-            var changed = !PinStates.ContainsKey(pin) || PinStates[pin] != value;
-
-            PinStates[pin] = value;
-
-            return changed;
         }
 
         private void StopInternal()
