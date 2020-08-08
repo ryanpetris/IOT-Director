@@ -1,10 +1,6 @@
 using System;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using IotDirector.Extensions;
-using IotDirector.Settings;
-using MQTTnet;
 
 namespace IotDirector.Mqtt
 {
