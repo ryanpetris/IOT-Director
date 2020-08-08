@@ -12,14 +12,14 @@ namespace IotDirector.Connection
         
         private NetworkStream Stream { get; }
         
-        public string ClientId { get; }
+        public string DeviceId { get; }
 
         public ArduinoProxy(NetworkStream stream)
         {
             Stream = stream;
             Stream.ReadTimeout = StreamReadTimeout;
             
-            ClientId = GetClientId();
+            DeviceId = GetDeviceId();
         }
 
         public int AnalogRead(int pin)
@@ -72,7 +72,7 @@ namespace IotDirector.Connection
             DigitalWrite(pin, state);
         }
         
-        private string GetClientId()
+        private string GetDeviceId()
         {
             var clientId = ReadLine();
 

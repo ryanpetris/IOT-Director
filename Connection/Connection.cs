@@ -11,7 +11,7 @@ using AppSettings = IotDirector.Settings.Settings;
 
 namespace IotDirector.Connection
 {
-    public class Connection : IDisposable
+    public class Connection : IDisposable, IMqttConnection
     {
         private TcpClient Client { get; }
         private ArduinoProxy Arduino { get; }
@@ -24,6 +24,9 @@ namespace IotDirector.Connection
         
         private TaskStatus Status { get; set; }
         private Thread Thread { get; }
+
+        Guid IMqttConnection.Id { get; } = Guid.NewGuid();
+        string IMqttConnection.DeviceId => Arduino.DeviceId;
         
         public Connection(AppSettings settings, TcpClient client, HaMqttClient mqttClient)
         {
@@ -33,14 +36,13 @@ namespace IotDirector.Connection
             MqttClient = mqttClient;
             
             Settings = settings;
-            Sensors = Settings.Sensors.Where(s => s.DeviceId == Arduino.ClientId).ToArray();
+            Sensors = Settings.Sensors.Where(s => s.DeviceId == Arduino.DeviceId).ToArray();
             PinStates = new Dictionary<int, int>();
             
             Status = TaskStatus.Created;
             Thread = new Thread(Run);
 
-            MqttClient.OnSendPinStateEvent += OnSendPinState;
-            MqttClient.OnSwitchSetEvent += OnSwitchSet;
+            MqttClient.AddConnection(this);
         }
 
         public void Start()
@@ -77,7 +79,7 @@ namespace IotDirector.Connection
 
         private void OnConnect()
         {
-            Console.WriteLine($"Client {Arduino.ClientId} connected on {Client.Client.RemoteEndPoint}.");
+            Console.WriteLine($"Client {Arduino.DeviceId} connected on {Client.Client.RemoteEndPoint}.");
 
             foreach (var sensor in Sensors)
             {
@@ -192,7 +194,7 @@ namespace IotDirector.Connection
             }
         }
 
-        private void OnSendPinState(object sender, EventArgs args)
+        void IMqttConnection.PublishPinStates()
         {
             foreach (var sensor in Sensors)
             {
@@ -254,25 +256,25 @@ namespace IotDirector.Connection
             }
         }
 
-        private void OnSwitchSet(object sender, SwitchSetEventArgs args)
+        void IMqttConnection.SetSwitchState(string sensorId, bool state)
         {
-            var sensor = Sensors.FirstOrDefault(s => s.Id == args.SensorId) as SwitchSensor;
+            var sensor = Sensors.FirstOrDefault(s => s.Id == sensorId) as SwitchSensor;
 
             if (sensor == null)
                 return;
 
-            var state = args.NewState;
+            var pinState = state;
 
             if (sensor.Invert)
-                state = !state;
+                pinState = !pinState;
             
-            if (!SavePinState(sensor.Pin, state))
+            if (!SavePinState(sensor.Pin, pinState))
                 return;
             
-            Arduino.DigitalWrite(sensor.Pin, state);
+            Arduino.DigitalWrite(sensor.Pin, pinState);
                         
-            Console.WriteLine($"{sensor.Name} state changed to {(args.NewState ? "on" : "off")} via MQTT.");
-            MqttClient.PublishSensorState(sensor, args.NewState);
+            Console.WriteLine($"{sensor.Name} state changed to {(state ? "on" : "off")} via MQTT.");
+            MqttClient.PublishSensorState(sensor, state);
         }
 
         private void Run()
@@ -317,12 +319,9 @@ namespace IotDirector.Connection
 
         private void StopInternal()
         {
-            Console.WriteLine($"Client {Arduino.ClientId} disconnected from {Client.Client.RemoteEndPoint}.");
+            Console.WriteLine($"Client {Arduino.DeviceId} disconnected from {Client.Client.RemoteEndPoint}.");
 
-            // ReSharper disable once DelegateSubtraction
-            MqttClient.OnSendPinStateEvent -= OnSendPinState;
-            // ReSharper disable once DelegateSubtraction
-            MqttClient.OnSwitchSetEvent -= OnSwitchSet;
+            MqttClient.RemoveConnection(this);
             
             try
             {
