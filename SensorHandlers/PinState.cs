@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace IotDirector.Connection
+namespace IotDirector.SensorHandlers
 {
     public class PinState
     {
