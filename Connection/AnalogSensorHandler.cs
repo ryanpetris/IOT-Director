@@ -86,15 +86,6 @@ namespace IotDirector.Connection
             var analogStatus = state >= 0;
             var analogState = state == 1;
 
-            if (!analogStatus)
-            {
-                Console.WriteLine($"Send {analogSensor.Name} state as offline.");
-            }
-            else
-            {
-                Console.WriteLine($"Send {analogSensor.Name} state as {(analogState ? "on" : "off")}.");
-            }
-
             MqttClient.PublishSensorStatus(analogSensor, analogStatus);
             MqttClient.PublishSensorState(analogSensor, analogState);
         }

@@ -57,8 +57,6 @@ namespace IotDirector.Connection
 
             if (digitalSensor.Invert)
                 digitalState = !digitalState;
-
-            Console.WriteLine($"Send {digitalSensor.Name} state as {(digitalState ? "on" : "off")}.");
             
             MqttClient.PublishSensorStatus(digitalSensor, true);
             MqttClient.PublishSensorState(digitalSensor, digitalState);

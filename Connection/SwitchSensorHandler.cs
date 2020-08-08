@@ -53,8 +53,6 @@ namespace IotDirector.Connection
 
             if (switchSensor.Invert)
                 switchState = !switchState;
-
-            Console.WriteLine($"Send {switchSensor.Name} state as {(switchState ? "on" : "off")}.");
             
             MqttClient.PublishSensorStatus(switchSensor, true);
             MqttClient.PublishSensorState(switchSensor, switchState);
