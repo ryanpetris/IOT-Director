@@ -1,9 +1,10 @@
 using System;
 using IotDirector.Commands;
+using IotDirector.Connection;
 using IotDirector.Mqtt;
 using IotDirector.Settings;
 
-namespace IotDirector.Connection
+namespace IotDirector.SensorHandlers
 {
     public class DigitalSensorHandler : SensorHandler
     {

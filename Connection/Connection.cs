@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using IotDirector.Mqtt;
+using IotDirector.SensorHandlers;
 using IotDirector.Settings;
 using AppSettings = IotDirector.Settings.Settings;
 
