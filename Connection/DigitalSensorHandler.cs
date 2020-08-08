@@ -23,6 +23,7 @@ namespace IotDirector.Connection
                 return;
 
             ArduinoProxy.SetPinMode(digitalSensor.Pin, PinMode.InputPullup);
+            MqttClient.PublishSensorStatus(digitalSensor, true);
         }
 
         public override void OnLoop(Sensor sensor)
@@ -39,6 +40,8 @@ namespace IotDirector.Connection
                 state = !state;
             
             Console.WriteLine($"{digitalSensor.Name} state changed to {(state ? "on" : "off")}.");
+            
+            MqttClient.PublishSensorStatus(digitalSensor, true);
             MqttClient.PublishSensorState(digitalSensor, state);
         }
 
@@ -56,6 +59,8 @@ namespace IotDirector.Connection
                 digitalState = !digitalState;
 
             Console.WriteLine($"Send {digitalSensor.Name} state as {(digitalState ? "on" : "off")}.");
+            
+            MqttClient.PublishSensorStatus(digitalSensor, true);
             MqttClient.PublishSensorState(digitalSensor, digitalState);
         }
 

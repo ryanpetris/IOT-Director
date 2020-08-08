@@ -23,15 +23,17 @@ namespace IotDirector.Mqtt
             Settings = settings;
             CancellationToken = cancellationToken;
             Client = Connect();
-            
+
+            InitConfiguration();
             InitMessages();
-            InitPublish();
+            InitPinStates();
             
             MonitorCancellation();
         }
 
+        partial void InitConfiguration();
         partial void InitMessages();
-        partial void InitPublish();
+        partial void InitPinStates();
         
         private IMqttClient Connect()
         {

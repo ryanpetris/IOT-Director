@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using IotDirector.Extensions;
 using IotDirector.Settings;
 using MQTTnet;
 
@@ -9,11 +11,11 @@ namespace IotDirector.Mqtt
 {
     public partial class HaMqttClient
     {
-        private static TimeSpan PublishPinStatesQuietPeriod { get; } = TimeSpan.FromSeconds(5);
-
-        partial void InitPublish()
+        private static TimeSpan PublishUnavailableSensorsQuietPeriod { get; } = TimeSpan.FromSeconds(1);
+        
+        partial void InitConfiguration()
         {
-            PublishPinStatesLoop();
+            ((Func<Task>)PublishUnavailableSensors).LoopUntilCancelled(CancellationToken, PublishUnavailableSensorsQuietPeriod);
         }
         
         private async Task PublishConfiguration()
@@ -34,8 +36,11 @@ namespace IotDirector.Mqtt
                             name = digitalSensor.Name,
                             device_class = MapDigitalSensorClass(digitalSensor.Class),
                             state_topic = GetControlStateTopicName(digitalSensor),
+                            availability_topic = GetControlStatusTopicName(digitalSensor),
                             payload_on = OnState,
-                            payload_off = OffState
+                            payload_off = OffState,
+                            payload_available = OnlineStatus,
+                            payload_not_available = OfflineStatus
                         };
 
                         message.Topic = GetDiscoveryTopicName(digitalSensor);
@@ -83,8 +88,11 @@ namespace IotDirector.Mqtt
                             name = switchSensor.Name,
                             state_topic = GetControlStateTopicName(switchSensor),
                             command_topic = GetControlSetTopicName(switchSensor),
+                            availability_topic = GetControlStatusTopicName(switchSensor),
                             payload_on = OnState,
-                            payload_off = OffState
+                            payload_off = OffState,
+                            payload_available = OnlineStatus,
+                            payload_not_available = OfflineStatus
                         };
 
                         message.Topic = GetDiscoveryTopicName(switchSensor);
@@ -98,45 +106,16 @@ namespace IotDirector.Mqtt
                 }
             }
         }
-        
-        private void PublishPinStates()
-        {
-            if (!Client.IsConnected)
-                return;
-            
-            RunAllConnections(c => c.PublishPinStates());
-        }
 
-        private async void PublishPinStatesLoop()
+        private async Task PublishUnavailableSensors()
         {
             await Task.Yield();
             
-            try
-            {
-                while (true)
-                {
-                    if (CancellationToken.IsCancellationRequested)
-                        CancellationToken.ThrowIfCancellationRequested();
+            var devices = GetConnectedDevices();
+            var sensors = Settings.Sensors.Where(s => !devices.Contains(s.DeviceId));
 
-                    PublishPinStates();
-
-                    if (CancellationToken.IsCancellationRequested)
-                        CancellationToken.ThrowIfCancellationRequested();
-
-                    try
-                    {
-                        await Task.Delay(PublishPinStatesQuietPeriod, CancellationToken);
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        // This block intentionally left empty.
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                Console.WriteLine("Publish Pin States thread shutdown.");
-            }
+            foreach (var sensor in sensors)
+                PublishSensorStatus(sensor, false);
         }
     }
 }

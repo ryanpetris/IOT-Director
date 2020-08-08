@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using IotDirector.Extensions;
 using IotDirector.Settings;
 using MQTTnet;
 using MQTTnet.Client;
@@ -19,7 +20,7 @@ namespace IotDirector.Mqtt
 
         partial void InitMessages()
         {
-            PublishMessagesLoop();
+            ((Func<Task>)PublishMessages).LoopUntilCancelled(CancellationToken, MessageQuietPeriod);
         }
 
         private async Task PublishMessages()
@@ -61,37 +62,6 @@ namespace IotDirector.Mqtt
                 await Client.PublishAsync(messages);
                 
                 PendingMessages.Clear();
-            }
-        }
-
-        private async void PublishMessagesLoop()
-        {
-            await Task.Yield();
-            
-            try {
-                while (true)
-                {
-                    if (CancellationToken.IsCancellationRequested)
-                        CancellationToken.ThrowIfCancellationRequested();
-
-                    await PublishMessages();
-                    
-                    if (CancellationToken.IsCancellationRequested)
-                        CancellationToken.ThrowIfCancellationRequested();
-
-                    try
-                    {
-                        await Task.Delay(MessageQuietPeriod, CancellationToken);
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                Console.WriteLine("Publish Messages thread shutdown.");
             }
         }
         

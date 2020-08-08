@@ -29,12 +29,16 @@ namespace IotDirector.Connection
 
             PinState.Set(switchSensor.Pin, state);
             ArduinoProxy.SetPinMode(switchSensor.Pin, PinMode.Output, state);
+            MqttClient.PublishSensorStatus(switchSensor, true);
             MqttClient.PublishSensorState(switchSensor, switchSensor.DefaultState);
         }
 
         public override void OnLoop(Sensor sensor)
         {
-            // This function intentionally left empty.
+            if (!(sensor is SwitchSensor switchSensor))
+                return;
+
+            MqttClient.PublishSensorStatus(switchSensor, true);
         }
 
         public override void OnPublish(Sensor sensor)
@@ -51,6 +55,8 @@ namespace IotDirector.Connection
                 switchState = !switchState;
 
             Console.WriteLine($"Send {switchSensor.Name} state as {(switchState ? "on" : "off")}.");
+            
+            MqttClient.PublishSensorStatus(switchSensor, true);
             MqttClient.PublishSensorState(switchSensor, switchState);
         }
 
@@ -71,6 +77,8 @@ namespace IotDirector.Connection
             ArduinoProxy.DigitalWrite(switchSensor.Pin, actualState);
                         
             Console.WriteLine($"{switchSensor.Name} state changed to {(apparentState ? "on" : "off")} via MQTT.");
+            
+            MqttClient.PublishSensorStatus(switchSensor, true);
             MqttClient.PublishSensorState(switchSensor, apparentState);
         }
     }

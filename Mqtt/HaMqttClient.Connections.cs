@@ -14,18 +14,25 @@ namespace IotDirector.Mqtt
             if (!Connections.TryAdd(connection.Id, connection))
                 throw new Exception($"Count not add connection {connection.Id} to list of connections.");
         }
-
-        private IMqttConnection GetConnection(string deviceId)
-        {
-            return Connections.Values.FirstOrDefault(c => c.DeviceId == deviceId);
-        }
         
         public void RemoveConnection(IMqttConnection connection)
         {
             Connections.TryRemove(connection.Id, out _);
         }
 
-        public void RunAllConnections(Action<IMqttConnection> action)
+        private IImmutableList<string> GetConnectedDevices()
+        {
+            var connections = Connections.Values.ToImmutableList();
+
+            return connections.Select(c => c.DeviceId).Distinct().ToImmutableList();
+        }
+
+        private IMqttConnection GetConnection(string deviceId)
+        {
+            return Connections.Values.FirstOrDefault(c => c.DeviceId == deviceId);
+        }
+
+        private void RunAllConnections(Action<IMqttConnection> action)
         {
             var connections = Connections.Values.ToImmutableList();
 

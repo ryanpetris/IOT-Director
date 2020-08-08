@@ -23,6 +23,7 @@ namespace IotDirector.Connection
                 return;
 
             ArduinoProxy.SetPinMode(analogSensor.Pin, PinMode.Input);
+            MqttClient.PublishSensorStatus(analogSensor, true);
         }
 
         public override void OnLoop(Sensor sensor)
