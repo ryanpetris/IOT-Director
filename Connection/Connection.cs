@@ -12,6 +12,9 @@ namespace IotDirector.Connection
 {
     public class Connection : IDisposable, IMqttConnection
     {
+        Guid IMqttConnection.Id { get; } = Guid.NewGuid();
+        string IMqttConnection.DeviceId => Arduino.DeviceId;
+        
         private TcpClient Client { get; }
         private ArduinoProxy Arduino { get; }
         
@@ -19,13 +22,10 @@ namespace IotDirector.Connection
         
         private AppSettings Settings { get; }
         private Sensor[] Sensors { get; }
-        private PinState PinState { get; } = new PinState();
+        private SensorHandler SensorHandler { get; }
         
         private TaskStatus Status { get; set; }
         private Thread Thread { get; }
-
-        Guid IMqttConnection.Id { get; } = Guid.NewGuid();
-        string IMqttConnection.DeviceId => Arduino.DeviceId;
         
         public Connection(AppSettings settings, TcpClient client, HaMqttClient mqttClient)
         {
@@ -39,6 +39,8 @@ namespace IotDirector.Connection
             
             Status = TaskStatus.Created;
             Thread = new Thread(Run);
+            
+            SensorHandler = new AggregateSensorHandler(Arduino, MqttClient);
 
             MqttClient.AddConnection(this);
         }
@@ -80,197 +82,29 @@ namespace IotDirector.Connection
             Console.WriteLine($"Client {Arduino.DeviceId} connected on {Client.Client.RemoteEndPoint}.");
 
             foreach (var sensor in Sensors)
-            {
-                switch (sensor.Type)
-                {
-                    case SensorType.Digital:
-                    {
-                        Arduino.SetPinMode(sensor.Pin, PinMode.InputPullup);
-                        
-                        break;
-                    }
-
-                    case SensorType.Analog:
-                    {
-                        Arduino.SetPinMode(sensor.Pin, PinMode.Input);
-                        
-                        break;
-                    }
-
-                    case SensorType.Switch:
-                    {
-                        var switchSensor = (SwitchSensor) sensor;
-                        var state = switchSensor.DefaultState;
-
-                        if (switchSensor.Invert)
-                            state = !state;
-
-                        PinState.Set(sensor.Pin, state);
-                        Arduino.SetPinMode(sensor.Pin, PinMode.Output, state);
-                        MqttClient.PublishSensorState(sensor, switchSensor.DefaultState);
-                        
-                        break;
-                    }
-                    
-                }
-            }
+                SensorHandler.OnConnect(sensor);
         }
 
         private void OnLoop()
         {
             foreach (var sensor in Sensors)
-            {
-                switch (sensor.Type)
-                {
-                    case SensorType.Digital:
-                    {
-                        var digitalSensor = (DigitalSensor) sensor;
-                        var state = Arduino.DigitalRead(digitalSensor.Pin);
-                        
-                        if (!PinState.Set(sensor.Pin, state))
-                            continue;
-                        
-                        if (digitalSensor.Invert)
-                            state = !state;
-                        
-                        Console.WriteLine($"{sensor.Name} state changed to {(state ? "on" : "off")}.");
-                        MqttClient.PublishSensorState(sensor, state);
-                        
-                        break;
-                    }
-                    
-                    case SensorType.Analog:
-                    {
-                        var analogSensor = (AnalogSensor) sensor;
-                        var value = Arduino.AnalogRead(analogSensor.Pin);
-                        var status = false;
-                        var state = false;
-
-                        if (value >= analogSensor.OfflineMin && value <= analogSensor.OfflineMax)
-                        {
-                            status = false;
-                            state = false;
-                        }
-                        else if (value >= analogSensor.OffMin && value <= analogSensor.OffMax)
-                        {
-                            status = true;
-                            state = false;
-                        }
-                        else if (value >= analogSensor.OnMin && value <= analogSensor.OnMax)
-                        {
-                            status = true;
-                            state = true;
-                        }
-                        else
-                        {
-                            status = false;
-                            state = false;
-                        }
-
-                        var pinState = (state ? 1 : 0) + (status ? 0 : -1);
-                        
-                        if (!PinState.Set(sensor.Pin, pinState))
-                            continue;
-
-                        if (!status)
-                        {
-                            Console.WriteLine($"{sensor.Name} state changed to offline.");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"{sensor.Name} state changed to {(state ? "on" : "off")}.");
-                        }
-
-                        MqttClient.PublishSensorStatus(sensor, status);
-                        MqttClient.PublishSensorState(sensor, state);
-                        
-                        break;
-                    }
-                        
-                }
-            }
+                SensorHandler.OnLoop(sensor);
         }
 
         void IMqttConnection.PublishPinStates()
         {
             foreach (var sensor in Sensors)
-            {
-                if (!PinState.Has(sensor.Pin))
-                    continue;
-
-                switch (sensor.Type)
-                {
-                    case SensorType.Digital:
-                    {
-                        var digitalSensor = (DigitalSensor) sensor;
-                        var digitalState = PinState.GetBool(sensor.Pin);
-
-                        if (digitalSensor.Invert)
-                            digitalState = !digitalState;
-
-                        Console.WriteLine($"Send {sensor.Name} state as {(digitalState ? "on" : "off")}.");
-                        MqttClient.PublishSensorState(sensor, digitalState);
-
-                        break;
-                    }
-
-                    case SensorType.Analog:
-                    {
-                        var state = PinState.Get(sensor.Pin);
-                        var analogStatus = state >= 0;
-                        var analogState = state == 1;
-
-                        if (!analogStatus)
-                        {
-                            Console.WriteLine($"Send {sensor.Name} state as offline.");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Send {sensor.Name} state as {(analogState ? "on" : "off")}.");
-                        }
-
-                        MqttClient.PublishSensorStatus(sensor, analogStatus);
-                        MqttClient.PublishSensorState(sensor, analogState);
-                        
-                        break;
-                    }
-                    
-                    case SensorType.Switch:
-                    {
-                        var switchSensor = (SwitchSensor) sensor;
-                        var switchState = PinState.GetBool(sensor.Pin);
-
-                        if (switchSensor.Invert)
-                            switchState = !switchState;
-
-                        Console.WriteLine($"Send {sensor.Name} state as {(switchState ? "on" : "off")}.");
-                        MqttClient.PublishSensorState(sensor, switchState);
-
-                        break;
-                    }
-                }
-            }
+                SensorHandler.OnPublish(sensor);
         }
 
         void IMqttConnection.SetSwitchState(string sensorId, bool state)
         {
-            var sensor = Sensors.FirstOrDefault(s => s.Id == sensorId) as SwitchSensor;
+            var sensor = Sensors.FirstOrDefault(s => s.Id == sensorId);
 
             if (sensor == null)
                 return;
-
-            var pinState = state;
-
-            if (sensor.Invert)
-                pinState = !pinState;
             
-            if (!PinState.Set(sensor.Pin, pinState))
-                return;
-            
-            Arduino.DigitalWrite(sensor.Pin, pinState);
-                        
-            Console.WriteLine($"{sensor.Name} state changed to {(state ? "on" : "off")} via MQTT.");
-            MqttClient.PublishSensorState(sensor, state);
+            SensorHandler.OnSetState(sensor, state);
         }
 
         private void Run()
