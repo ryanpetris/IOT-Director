@@ -10,10 +10,10 @@ using AppSettings = IotDirector.Settings.Settings;
 
 namespace IotDirector.Connection
 {
-    public class Connection : IDisposable, IMqttConnection
+    public class Connection : IDisposable, IHaMqttConnection
     {
-        Guid IMqttConnection.Id { get; } = Guid.NewGuid();
-        string IMqttConnection.DeviceId => Arduino.DeviceId;
+        Guid IHaMqttConnection.Id { get; } = Guid.NewGuid();
+        string IHaMqttConnection.DeviceId => Arduino.DeviceId;
         
         private TcpClient Client { get; }
         private ArduinoProxy Arduino { get; }
@@ -109,13 +109,13 @@ namespace IotDirector.Connection
                 SensorHandler.OnLoop(sensor);
         }
 
-        void IMqttConnection.PublishPinStates()
+        void IHaMqttConnection.PublishPinStates()
         {
             foreach (var sensor in Sensors)
                 SensorHandler.OnPublish(sensor);
         }
 
-        void IMqttConnection.SetSwitchState(string sensorId, bool state)
+        void IHaMqttConnection.SetSwitchState(string sensorId, bool state)
         {
             var sensor = Sensors.FirstOrDefault(s => s.Id == sensorId);
 

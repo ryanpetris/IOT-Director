@@ -7,15 +7,15 @@ namespace IotDirector.Mqtt
 {
     public partial class HaMqttClient
     {
-        private ConcurrentDictionary<Guid, IMqttConnection> Connections { get; } = new ConcurrentDictionary<Guid, IMqttConnection>();
+        private ConcurrentDictionary<Guid, IHaMqttConnection> Connections { get; } = new ConcurrentDictionary<Guid, IHaMqttConnection>();
 
-        public void AddConnection(IMqttConnection connection)
+        public void AddConnection(IHaMqttConnection connection)
         {
             if (!Connections.TryAdd(connection.Id, connection))
                 throw new Exception($"Count not add connection {connection.Id} to list of connections.");
         }
         
-        public void RemoveConnection(IMqttConnection connection)
+        public void RemoveConnection(IHaMqttConnection connection)
         {
             Connections.TryRemove(connection.Id, out _);
         }
@@ -27,12 +27,12 @@ namespace IotDirector.Mqtt
             return connections.Select(c => c.DeviceId).Distinct().ToImmutableList();
         }
 
-        private IMqttConnection GetConnection(string deviceId)
+        private IHaMqttConnection GetConnection(string deviceId)
         {
             return Connections.Values.FirstOrDefault(c => c.DeviceId == deviceId);
         }
 
-        private void RunAllConnections(Action<IMqttConnection> action)
+        private void RunAllConnections(Action<IHaMqttConnection> action)
         {
             var connections = Connections.Values.ToImmutableList();
 

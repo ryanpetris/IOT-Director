@@ -2,7 +2,7 @@ using System;
 
 namespace IotDirector.Mqtt
 {
-    public interface IMqttConnection
+    public interface IHaMqttConnection
     {
         public Guid Id { get; }
         public string DeviceId { get; }
