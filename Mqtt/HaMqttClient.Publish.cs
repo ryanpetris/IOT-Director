@@ -9,7 +9,7 @@ namespace IotDirector.Mqtt
 {
     public partial class HaMqttClient
     {
-        private static TimeSpan PublishPinStatesQuietPeriod { get; }= TimeSpan.FromSeconds(5);
+        private static TimeSpan PublishPinStatesQuietPeriod { get; } = TimeSpan.FromSeconds(5);
 
         partial void InitPublish()
         {
@@ -125,7 +125,7 @@ namespace IotDirector.Mqtt
 
                     try
                     {
-                        await Task.Delay(MessageQuietPeriod, CancellationToken);
+                        await Task.Delay(PublishPinStatesQuietPeriod, CancellationToken);
                     }
                     catch (TaskCanceledException)
                     {
