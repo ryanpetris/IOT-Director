@@ -53,15 +53,17 @@ namespace IotDirector.Connection
 
             Status = TaskStatus.Running;
             
-            MqttClient.AddConnection(this);
-            MonitorCancellation();
             ArduinoCommandHandler.Start();
 
             DeviceId = await Arduino.GetDeviceId();
             Sensors = Settings.Sensors.Where(s => s.DeviceId == DeviceId).ToArray();
             SensorHandler = new AggregateSensorHandler(Arduino, MqttClient);
+            
+            MqttClient.AddConnection(this);
 
             RunTask = Run();
+            
+            MonitorCancellation();
         }
 
         public void Stop()
