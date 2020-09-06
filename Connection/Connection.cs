@@ -33,7 +33,7 @@ namespace IotDirector.Connection
         {
             CancellationToken = cancellationToken;            
             Client = client;
-            ArduinoCommandHandler = new ArduinoCommandHandler(client.GetStream(), cancellationToken);
+            ArduinoCommandHandler = new ArduinoCommandHandler(client.GetStream());
             Arduino = new ArduinoProxy(ArduinoCommandHandler);
             
             MqttClient = mqttClient;
@@ -148,10 +148,14 @@ namespace IotDirector.Connection
                         StopInternal();
                         return;
                     }
-                    
+
                     await Arduino.Noop();
                     await OnLoop();
                 }
+            }
+            catch (ArduinoException)
+            {
+                StopInternal();
             }
             catch (Exception e)
             {

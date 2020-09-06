@@ -15,7 +15,6 @@ namespace IotDirector.Connection
         private const int CommandResultTimeout = 5000;
         
         private NetworkStream Stream { get; }
-        private CancellationToken CancellationToken { get; }
         
         private TaskStatus Status { get; set; }
         private Thread ReceiveThread { get; }
@@ -24,13 +23,11 @@ namespace IotDirector.Connection
         private ReaderWriterLockSlim SendLock { get; }
         private ConcurrentDictionary<int, ArduinoCommandResult> Results { get; }
 
-        public ArduinoCommandHandler(NetworkStream stream, CancellationToken cancellationToken)
+        public ArduinoCommandHandler(NetworkStream stream)
         {
             Stream = stream;
             Stream.ReadTimeout = StreamReadTimeout;
 
-            CancellationToken = cancellationToken;
-            
             Status = TaskStatus.Created;
             ReceiveThread = new Thread(DoReceive);
 
@@ -99,9 +96,12 @@ namespace IotDirector.Connection
             {
                 while (Status == TaskStatus.Running)
                 {
-                    if (CancellationToken.IsCancellationRequested)
-                        CancellationToken.ThrowIfCancellationRequested();
-
+                    if (!Stream.CanWrite)
+                    {
+                        StopInternal();
+                        return;
+                    }
+                    
                     var line = ReadLine();
 
                     if (string.IsNullOrEmpty(line) || !line.StartsWith("C"))
@@ -158,6 +158,10 @@ namespace IotDirector.Connection
                 }
 
                 return result.ToString();
+            }
+            catch (ObjectDisposedException)
+            {
+                return null;
             }
             catch (IOException)
             {
