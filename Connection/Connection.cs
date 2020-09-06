@@ -33,7 +33,7 @@ namespace IotDirector.Connection
         {
             CancellationToken = cancellationToken;            
             Client = client;
-            ArduinoCommandHandler = new ArduinoCommandHandler(client.GetStream());
+            ArduinoCommandHandler = new ArduinoCommandHandler(client.GetStream(), cancellationToken);
             Arduino = new ArduinoProxy(ArduinoCommandHandler);
             
             MqttClient = mqttClient;
@@ -84,7 +84,8 @@ namespace IotDirector.Connection
                 {
                     Console.WriteLine($"Error joining to connection thread: {e}");
                 }
-
+                
+                ArduinoCommandHandler.Stop();
                 StopInternal();
             }
         }

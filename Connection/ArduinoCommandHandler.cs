@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -14,6 +15,7 @@ namespace IotDirector.Connection
         private const int CommandResultTimeout = 5000;
         
         private NetworkStream Stream { get; }
+        private CancellationToken CancellationToken { get; }
         
         private TaskStatus Status { get; set; }
         private Thread ReceiveThread { get; }
@@ -22,10 +24,12 @@ namespace IotDirector.Connection
         private ReaderWriterLockSlim SendLock { get; }
         private ConcurrentDictionary<int, ArduinoCommandResult> Results { get; }
 
-        public ArduinoCommandHandler(NetworkStream stream)
+        public ArduinoCommandHandler(NetworkStream stream, CancellationToken cancellationToken)
         {
             Stream = stream;
             Stream.ReadTimeout = StreamReadTimeout;
+
+            CancellationToken = cancellationToken;
             
             Status = TaskStatus.Created;
             ReceiveThread = new Thread(DoReceive);
@@ -48,7 +52,7 @@ namespace IotDirector.Connection
 
             try
             {
-                await Task.Delay(5000, result.CancellationToken);
+                await Task.Delay(CommandResultTimeout, result.CancellationToken);
             }
             catch (TaskCanceledException) { }
 
@@ -93,21 +97,27 @@ namespace IotDirector.Connection
         {
             while (Status == TaskStatus.Running)
             {
+                if (CancellationToken.IsCancellationRequested)
+                {
+                    StopInternal();
+                    return;
+                }
+                
                 var line = ReadLine();
 
-                if (line.StartsWith("R"))
+                if (string.IsNullOrEmpty(line) || !line.StartsWith("C"))
+                    continue;
+            
+                var commandIdText = line.Substring(1, 4).TrimStart('0');
+
+                if (string.IsNullOrEmpty(commandIdText))
+                    commandIdText = "0";
+                
+                var commandId = int.Parse(commandIdText);
+
+                if (Results.TryGetValue(commandId, out var result))
                 {
-                    var commandIdText = line.Substring(1, 4).TrimStart('0');
-
-                    if (string.IsNullOrEmpty(commandIdText))
-                        commandIdText = "0";
-                    
-                    var commandId = int.Parse(commandIdText);
-
-                    if (Results.TryGetValue(commandId, out var result))
-                    {
-                        result.SetResult(line.Substring(5));
-                    }
+                    result.SetResult(line.Substring(5));
                 }
             }
         }
@@ -124,22 +134,29 @@ namespace IotDirector.Connection
         
         private string ReadLine()
         {
-            var result = new StringBuilder();
-
-            while (true)
+            try
             {
-                var data = (char) Stream.ReadByte();
-                
-                if (data == '\r')
-                    continue;
+                var result = new StringBuilder();
 
-                if (data == '\n')
-                    break;
-                    
-                result.Append(data);
+                while (true)
+                {
+                    var data = (char) Stream.ReadByte();
+
+                    if (data == '\r')
+                        continue;
+
+                    if (data == '\n')
+                        break;
+
+                    result.Append(data);
+                }
+
+                return result.ToString();
             }
-
-            return result.ToString();
+            catch (IOException)
+            {
+                return null;
+            }
         }
 
         private async Task<int> SendInternal(Command command)
