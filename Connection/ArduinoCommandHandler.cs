@@ -95,30 +95,36 @@ namespace IotDirector.Connection
 
         private void DoReceive()
         {
-            while (Status == TaskStatus.Running)
+            try
             {
-                if (CancellationToken.IsCancellationRequested)
+                while (Status == TaskStatus.Running)
                 {
-                    StopInternal();
-                    return;
+                    if (CancellationToken.IsCancellationRequested)
+                        CancellationToken.ThrowIfCancellationRequested();
+
+                    var line = ReadLine();
+
+                    if (string.IsNullOrEmpty(line) || !line.StartsWith("C"))
+                        continue;
+
+                    var commandIdText = line.Substring(1, 4).TrimStart('0');
+
+                    if (string.IsNullOrEmpty(commandIdText))
+                        commandIdText = "0";
+
+                    var commandId = int.Parse(commandIdText);
+
+                    if (Results.TryGetValue(commandId, out var result))
+                    {
+                        result.SetResult(line.Substring(5));
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception in Arduino Command Handler thread: {e}");
                 
-                var line = ReadLine();
-
-                if (string.IsNullOrEmpty(line) || !line.StartsWith("C"))
-                    continue;
-            
-                var commandIdText = line.Substring(1, 4).TrimStart('0');
-
-                if (string.IsNullOrEmpty(commandIdText))
-                    commandIdText = "0";
-                
-                var commandId = int.Parse(commandIdText);
-
-                if (Results.TryGetValue(commandId, out var result))
-                {
-                    result.SetResult(line.Substring(5));
-                }
+                StopInternal();
             }
         }
 

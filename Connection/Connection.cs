@@ -155,7 +155,7 @@ namespace IotDirector.Connection
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Exception in connection thread: {e}");
+                Console.WriteLine($"Exception in Connection thread: {e}");
                 
                 StopInternal();
             }
