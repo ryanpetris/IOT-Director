@@ -24,7 +24,7 @@ namespace IotDirector.Connection
         private CancellationToken CancellationToken { get; }
         private AppSettings Settings { get; }
         private Sensor[] Sensors { get; set; }
-        private SensorHandler SensorHandler { get; }
+        private SensorHandler SensorHandler { get; set; }
         
         private TaskStatus Status { get; set; }
         private Task RunTask { get; set; }
@@ -37,16 +37,8 @@ namespace IotDirector.Connection
             Arduino = new ArduinoProxy(ArduinoCommandHandler);
             
             MqttClient = mqttClient;
-            
             Settings = settings;
-            
             Status = TaskStatus.Created;
-            
-            SensorHandler = new AggregateSensorHandler(Arduino, MqttClient);
-
-            MqttClient.AddConnection(this);
-            
-            MonitorCancellation();
         }
 
         public async Task Start()
@@ -60,10 +52,14 @@ namespace IotDirector.Connection
                 throw new Exception("Connection stopped and cannot be restarted.");
 
             Status = TaskStatus.Running;
+            
+            MqttClient.AddConnection(this);
+            MonitorCancellation();
             ArduinoCommandHandler.Start();
 
             DeviceId = await Arduino.GetDeviceId();
             Sensors = Settings.Sensors.Where(s => s.DeviceId == DeviceId).ToArray();
+            SensorHandler = new AggregateSensorHandler(Arduino, MqttClient);
 
             RunTask = Run();
         }
