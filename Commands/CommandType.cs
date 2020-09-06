@@ -7,6 +7,7 @@ namespace IotDirector.Commands
         DigitalRead = 'R',
         DigitalWrite = 'W',
         AnalogRead = 'A',
-        Noop = 'N'
+        Noop = 'N',
+        GetDeviceId = 'I'
     }
 }

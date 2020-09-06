@@ -13,34 +13,34 @@ namespace IotDirector.Connection
     public class Connection : IDisposable, IHaMqttConnection
     {
         Guid IHaMqttConnection.Id { get; } = Guid.NewGuid();
-        string IHaMqttConnection.DeviceId => Arduino.DeviceId;
+        public string DeviceId { get; private set; }
         
         private TcpClient Client { get; }
+        private ArduinoCommandHandler ArduinoCommandHandler { get; }
         private ArduinoProxy Arduino { get; }
         
         private HaMqttClient MqttClient { get; }
         
         private CancellationToken CancellationToken { get; }
         private AppSettings Settings { get; }
-        private Sensor[] Sensors { get; }
+        private Sensor[] Sensors { get; set; }
         private SensorHandler SensorHandler { get; }
         
         private TaskStatus Status { get; set; }
-        private Thread Thread { get; }
+        private Task RunTask { get; set; }
         
         public Connection(AppSettings settings, TcpClient client, HaMqttClient mqttClient, CancellationToken cancellationToken)
         {
             CancellationToken = cancellationToken;            
             Client = client;
-            Arduino = new ArduinoProxy(client.GetStream());
+            ArduinoCommandHandler = new ArduinoCommandHandler(client.GetStream());
+            Arduino = new ArduinoProxy(ArduinoCommandHandler);
             
             MqttClient = mqttClient;
             
             Settings = settings;
-            Sensors = Settings.Sensors.Where(s => s.DeviceId == Arduino.DeviceId).ToArray();
             
             Status = TaskStatus.Created;
-            Thread = new Thread(Run);
             
             SensorHandler = new AggregateSensorHandler(Arduino, MqttClient);
 
@@ -49,8 +49,10 @@ namespace IotDirector.Connection
             MonitorCancellation();
         }
 
-        public void Start()
+        public async Task Start()
         {
+            await Task.Yield();
+            
             if (Status == TaskStatus.Running)
                 return;
             
@@ -58,7 +60,12 @@ namespace IotDirector.Connection
                 throw new Exception("Connection stopped and cannot be restarted.");
 
             Status = TaskStatus.Running;
-            Thread.Start();
+            ArduinoCommandHandler.Start();
+
+            DeviceId = await Arduino.GetDeviceId();
+            Sensors = Settings.Sensors.Where(s => s.DeviceId == DeviceId).ToArray();
+
+            RunTask = Run();
         }
 
         public void Stop()
@@ -70,7 +77,8 @@ namespace IotDirector.Connection
             {
                 try
                 {
-                    Thread.Join();
+                    // ReSharper disable once MethodSupportsCancellation
+                    RunTask.Wait();
                 }
                 catch (Exception e)
                 {
@@ -95,41 +103,44 @@ namespace IotDirector.Connection
             }
         }
 
-        private void OnConnect()
+        private async Task OnConnect()
         {
-            Console.WriteLine($"Client {Arduino.DeviceId} connected on {Client.Client.RemoteEndPoint}.");
+            await Task.Yield();
+            
+            Console.WriteLine($"Client {DeviceId} connected on {Client.Client.RemoteEndPoint}.");
 
-            foreach (var sensor in Sensors)
-                SensorHandler.OnConnect(sensor);
+            await Task.WhenAll(Sensors.Select(SensorHandler.OnConnect));
         }
 
-        private void OnLoop()
+        private async Task OnLoop()
         {
-            foreach (var sensor in Sensors)
-                SensorHandler.OnLoop(sensor);
+            await Task.Yield();
+            await Task.WhenAll(Sensors.Select(SensorHandler.OnLoop));
         }
 
-        void IHaMqttConnection.PublishPinStates()
+        async Task IHaMqttConnection.PublishPinStates()
         {
-            foreach (var sensor in Sensors)
-                SensorHandler.OnPublish(sensor);
+            await Task.Yield();
+            await Task.WhenAll(Sensors.Select(SensorHandler.OnPublish));
         }
 
-        void IHaMqttConnection.SetSwitchState(string sensorId, bool state)
+        async Task IHaMqttConnection.SetSwitchState(string sensorId, bool state)
         {
+            await Task.Yield();
+            
             var sensor = Sensors.FirstOrDefault(s => s.Id == sensorId);
 
             if (sensor == null)
                 return;
             
-            SensorHandler.OnSetState(sensor, state);
+            await SensorHandler.OnSetState(sensor, state);
         }
 
-        private void Run()
+        private async Task Run()
         {
             try
             {
-                OnConnect();
+                await OnConnect();
 
                 while (Status == TaskStatus.Running)
                 {
@@ -139,8 +150,8 @@ namespace IotDirector.Connection
                         return;
                     }
                     
-                    Arduino.Noop();
-                    OnLoop();
+                    await Arduino.Noop();
+                    await OnLoop();
                 }
             }
             catch (Exception e)
@@ -156,7 +167,7 @@ namespace IotDirector.Connection
             if (Status == TaskStatus.RanToCompletion)
                 return;
             
-            Console.WriteLine($"Client {Arduino.DeviceId} disconnected from {Client.Client.RemoteEndPoint}.");
+            Console.WriteLine($"Client {DeviceId} disconnected from {Client.Client.RemoteEndPoint}.");
 
             MqttClient.RemoveConnection(this);
             
@@ -178,7 +189,7 @@ namespace IotDirector.Connection
         {
             StopInternal();
             
-            Arduino?.Dispose();
+            ArduinoCommandHandler?.Dispose();
             Client?.Dispose();
         }
     }

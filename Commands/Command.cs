@@ -10,7 +10,7 @@ namespace IotDirector.Commands
 
         public override string ToString()
         {
-            return $"{(char) CommandType}{Pin:D2}{AdditionalData}\n";
+            return $"{(char) CommandType}{Pin:D2}{AdditionalData}";
         }
     }
 }

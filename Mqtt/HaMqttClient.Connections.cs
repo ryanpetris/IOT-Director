@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace IotDirector.Mqtt
 {
@@ -32,21 +33,11 @@ namespace IotDirector.Mqtt
             return Connections.Values.FirstOrDefault(c => c.DeviceId == deviceId);
         }
 
-        private void RunAllConnections(Action<IHaMqttConnection> action)
+        private async Task RunAllConnections(Func<IHaMqttConnection, Task> action)
         {
             var connections = Connections.Values.ToImmutableList();
-
-            foreach (var connection in connections)
-            {
-                try
-                {
-                    action.Invoke(connection);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Error running command in connection {connection.Id}: {e}");
-                }
-            }
+            
+            await Task.WhenAll(connections.Select(action.Invoke));
         }
     }
 }

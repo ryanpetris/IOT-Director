@@ -1,30 +1,25 @@
 using System;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using IotDirector.Commands;
 
 namespace IotDirector.Connection
 {
-    public class ArduinoProxy : IDisposable
+    public class ArduinoProxy
     {
-        private const int StreamReadTimeout = 1000;
-        
-        private NetworkStream Stream { get; }
-        
-        public string DeviceId { get; }
+        private ArduinoCommandHandler CommandHandler { get; }
 
-        public ArduinoProxy(NetworkStream stream)
+        public ArduinoProxy(ArduinoCommandHandler commandHandler)
         {
-            Stream = stream;
-            Stream.ReadTimeout = StreamReadTimeout;
-            
-            DeviceId = GetDeviceId();
+            CommandHandler = commandHandler;
         }
 
-        public int AnalogRead(int pin)
+        public async Task<int> AnalogRead(int pin)
         {
-            var raw = SendCommand(new AnalogReadCommand(pin));
+            var raw = await CommandHandler.Send(new AnalogReadCommand(pin));
             
             if (!int.TryParse(raw, out var result) || result < 0 || result > 1023)
                 throw new ArduinoException($"Invalid Analog Read result: {raw}");
@@ -32,9 +27,9 @@ namespace IotDirector.Connection
             return result;
         }
 
-        public bool DigitalRead(int pin)
+        public async Task<bool> DigitalRead(int pin)
         {
-            var raw = SendCommand(new DigitalReadCommand(pin));
+            var raw = await CommandHandler.Send(new DigitalReadCommand(pin));
 
             if (!int.TryParse(raw, out var result) || result < 0 || result > 1)
                 throw new ArduinoException($"Invalid Digital Read result: {raw}");
@@ -42,91 +37,44 @@ namespace IotDirector.Connection
             return result == 1;
         }
 
-        public void DigitalWrite(int pin, bool value)
+        public async Task DigitalWrite(int pin, bool value)
         {
-            SendCommand(new DigitalWriteCommand(pin, value));
-        }
-
-        public void Noop()
-        {
-            var raw = SendCommand(new NoopCommand());
-            
-            if (raw != "N")
-                throw new ArduinoException($"Invalid Noop result: {raw}");
-        }
-
-        public void SetPinMode(int pin, PinMode mode)
-        {
-            SendCommand(new PinModeCommand(pin, mode));
-            
-            if (mode == PinMode.Output)
-                DigitalWrite(pin, false);
-        }
-
-        public void SetPinMode(int pin, PinMode mode, bool state)
-        {
-            if (mode != PinMode.Output)
-                throw new ArduinoException($"Cannot set initial state for pin mode {mode}.");
-            
-            SendCommand(new PinModeCommand(pin, mode));
-            DigitalWrite(pin, state);
+            await CommandHandler.Send(new DigitalWriteCommand(pin, value));
         }
         
-        private string GetDeviceId()
+        public async Task<string> GetDeviceId()
         {
-            var clientId = ReadLine();
+            var clientId = await CommandHandler.Send(new GetDeviceIdCommand());
 
             if (!Regex.IsMatch(clientId, "([0-9A-F]{2}:){5}[0-9A-F]{2}", RegexOptions.IgnoreCase))
                 throw new Exception($"Invalid Client ID: {clientId}");
 
             return clientId;
         }
-        
-        private string ReadLine()
+
+        public async Task Noop()
         {
-            var result = new StringBuilder();
-
-            while (true)
-            {
-                var data = (char) Stream.ReadByte();
-                
-                if (data == '\r')
-                    continue;
-
-                if (data == '\n')
-                    break;
-                    
-                result.Append(data);
-            }
-
-            return result.ToString();
+            var raw = await CommandHandler.Send(new NoopCommand());
+            
+            if (raw != "N")
+                throw new ArduinoException($"Invalid Noop result: {raw}");
         }
 
-        private string SendCommand(Command command)
+        public async Task SetPinMode(int pin, PinMode mode)
         {
-            if (command.ExpectResult)
-            {
-                var bytes = new byte[256];
-                
-                while (Stream.DataAvailable)
-                {
-                    Stream.Read(bytes, 0, bytes.Length);
-                }
-            }
-
-            var commandBytes = Encoding.ASCII.GetBytes(command.ToString());
-
-            Stream.Write(new ReadOnlySpan<byte>(commandBytes));
-
-            if (command.ExpectResult)
-                return ReadLine();
-
-            return null;
+            await CommandHandler.Send(new PinModeCommand(pin, mode));
+            
+            if (mode == PinMode.Output)
+                await DigitalWrite(pin, false);
         }
 
-        public void Dispose()
+        public async Task SetPinMode(int pin, PinMode mode, bool state)
         {
-            Stream?.Dispose();
+            if (mode != PinMode.Output)
+                throw new ArduinoException($"Cannot set initial state for pin mode {mode}.");
+            
+            await CommandHandler.Send(new PinModeCommand(pin, mode));
+            await DigitalWrite(pin, state);
         }
     }
 }

@@ -20,7 +20,7 @@ namespace IotDirector.Mqtt
             if (!Client.IsConnected)
                 return;
             
-            RunAllConnections(c => c.PublishPinStates());
+            await RunAllConnections(c => c.PublishPinStates());
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 namespace IotDirector.Mqtt
 {
@@ -7,7 +8,7 @@ namespace IotDirector.Mqtt
         public Guid Id { get; }
         public string DeviceId { get; }
         
-        public void SetSwitchState(string sensorId, bool state);
-        public void PublishPinStates();
+        public Task SetSwitchState(string sensorId, bool state);
+        public Task PublishPinStates();
     }
 }

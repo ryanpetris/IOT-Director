@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using IotDirector.Connection;
 using IotDirector.Mqtt;
 using IotDirector.Settings;
@@ -25,36 +26,36 @@ namespace IotDirector.SensorHandlers
             return TryGetHandler(sensor, out _);
         }
         
-        public override void OnConnect(Sensor sensor)
+        public override async Task OnConnect(Sensor sensor)
         {
             if (!TryGetHandler(sensor, out var handler))
                 return;
             
-            handler.OnConnect(sensor);
+            await handler.OnConnect(sensor);
         }
 
-        public override void OnLoop(Sensor sensor)
+        public override async Task OnLoop(Sensor sensor)
         {
             if (!TryGetHandler(sensor, out var handler))
                 return;
             
-            handler.OnLoop(sensor);
+            await handler.OnLoop(sensor);
         }
 
-        public override void OnPublish(Sensor sensor)
+        public override async Task OnPublish(Sensor sensor)
         {
             if (!TryGetHandler(sensor, out var handler))
                 return;
             
-            handler.OnPublish(sensor);
+            await handler.OnPublish(sensor);
         }
 
-        public override void OnSetState(Sensor sensor, object state)
+        public override async Task OnSetState(Sensor sensor, object state)
         {
             if (!TryGetHandler(sensor, out var handler))
                 return;
             
-            handler.OnSetState(sensor, state);
+            await handler.OnSetState(sensor, state);
         }
 
         private bool TryGetHandler(Sensor sensor, out SensorHandler sensorHandler)

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using IotDirector.Commands;
 using IotDirector.Connection;
 using IotDirector.Mqtt;
@@ -18,20 +19,24 @@ namespace IotDirector.SensorHandlers
             return sensor.Type == SensorType.Analog && sensor is AnalogSensor;
         }
 
-        public override void OnConnect(Sensor sensor)
+        public override async Task OnConnect(Sensor sensor)
         {
+            await Task.Yield();
+            
             if (!(sensor is AnalogSensor analogSensor))
                 return;
 
-            ArduinoProxy.SetPinMode(analogSensor.Pin, PinMode.Input);
+            await ArduinoProxy.SetPinMode(analogSensor.Pin, PinMode.Input);
         }
 
-        public override void OnLoop(Sensor sensor)
+        public override async Task OnLoop(Sensor sensor)
         {
+            await Task.Yield();
+            
             if (!(sensor is AnalogSensor analogSensor))
                 return;
 
-            var value = ArduinoProxy.AnalogRead(analogSensor.Pin);
+            var value = await ArduinoProxy.AnalogRead(analogSensor.Pin);
             var status = false;
             var state = false;
 
@@ -74,8 +79,10 @@ namespace IotDirector.SensorHandlers
             MqttClient.PublishSensorState(analogSensor, state);
         }
 
-        public override void OnPublish(Sensor sensor)
+        public override async Task OnPublish(Sensor sensor)
         {
+            await Task.Yield();
+            
             if (!(sensor is AnalogSensor analogSensor))
                 return;
             
@@ -90,8 +97,10 @@ namespace IotDirector.SensorHandlers
             MqttClient.PublishSensorState(analogSensor, analogState);
         }
 
-        public override void OnSetState(Sensor sensor, object state)
+        public override async Task OnSetState(Sensor sensor, object state)
         {
+            await Task.Yield();
+            
             // This function intentionally left empty.
         }
     }

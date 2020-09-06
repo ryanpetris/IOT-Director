@@ -1,11 +1,11 @@
 namespace IotDirector.Commands
 {
-    public class NoopCommand : Command
+    public class GetDeviceIdCommand : Command
     {
-        public override CommandType CommandType => CommandType.Noop;
+        public override CommandType CommandType => CommandType.GetDeviceId;
         public override bool ExpectResult => true;
 
-        public NoopCommand()
+        public GetDeviceIdCommand()
         {
             
         }
